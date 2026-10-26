@@ -1,6 +1,6 @@
 # Image Tag Search
 
-Native Rust photo search using `ort` (ONNX Runtime) and egui/eframe, ported from the CLIP implementation in `ml_playground`. Pick a folder, enter a description such as **a swimming pool**, and browse the top 50 ranked images in a grid. Click a thumbnail for a larger preview.
+Native Rust photo search using `ort` (ONNX Runtime) and egui/eframe. Pick a folder, enter a description such as **a swimming pool**, and browse ranked images in a grid. The first 50 matches appear initially; click **Fetch next 50** to reveal more without rerunning the search. Click a thumbnail for a larger preview.
 
 ```powershell
 ./setup-clip.ps1

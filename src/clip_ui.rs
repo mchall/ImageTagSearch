@@ -16,6 +16,7 @@ use std::{
 
 type ImageKey = (PathBuf, bool);
 type ImageResult = (ImageKey, Result<egui::ColorImage, String>);
+const RESULTS_PER_PAGE: usize = 50;
 pub struct App {
     folder: String,
     models: String,
@@ -25,6 +26,8 @@ pub struct App {
     gpu: bool,
     adapter: i32,
     hits: Vec<Hit>,
+    visible_hits: usize,
+    reset_results_scroll: bool,
     selected: usize,
     busy: bool,
     status: String,
@@ -111,6 +114,8 @@ impl App {
             gpu: true,
             adapter: 0,
             hits: vec![],
+            visible_hits: 0,
+            reset_results_scroll: false,
             selected: 0,
             busy: false,
             status: "Choose a photo folder and describe what you’re looking for.".into(),
@@ -155,6 +160,8 @@ impl App {
         self.started = Some(Instant::now());
         self.searched = self.query.trim().into();
         self.hits.clear();
+        self.visible_hits = 0;
+        self.reset_results_scroll = true;
         self.textures.clear();
         self.selected = 0;
         self.status = "Finding photos…".into();
@@ -195,7 +202,8 @@ impl App {
                     total,
                     skipped,
                 } => {
-                    self.status=format!("Top {} of {total} images for “{}” · {skipped} unreadable files or folders skipped",hits.len(),self.searched);
+                    self.status=format!("{} matches from {total} images for “{}” · {skipped} unreadable files or folders skipped",hits.len(),self.searched);
+                    self.visible_hits = hits.len().min(RESULTS_PER_PAGE);
                     self.hits = hits;
                     self.finish();
                 }
@@ -241,14 +249,17 @@ impl App {
                 |ui| {
                     let cols = ((grid_width / 170.0) as usize).clamp(2, 5);
                     let cell = (grid_width - ((cols - 1) as f32 * 10.0)) / cols as f32;
-                    let rows = self.hits.len().div_ceil(cols);
-                    egui::ScrollArea::vertical()
+                    let rows = self.visible_hits.div_ceil(cols);
+                    let mut scroll = egui::ScrollArea::vertical()
                         .id_salt("results")
-                        .auto_shrink([false, false])
-                        .show_rows(ui, cell * 0.8 + 48.0, rows, |ui, range| {
+                        .auto_shrink([false, false]);
+                    if std::mem::take(&mut self.reset_results_scroll) {
+                        scroll = scroll.vertical_scroll_offset(0.0);
+                    }
+                    scroll.show_rows(ui, cell * 0.8 + 48.0, rows, |ui, range| {
                             for row in range {
                                 ui.horizontal_top(|ui| {
-                                    for index in row * cols..((row + 1) * cols).min(self.hits.len())
+                                    for index in row * cols..((row + 1) * cols).min(self.visible_hits)
                                     {
                                         let hit = self.hits[index].clone();
                                         ui.allocate_ui_with_layout(
@@ -379,7 +390,7 @@ impl App {
                         }
                         if ui
                             .add_enabled(
-                                self.selected + 1 < self.hits.len(),
+                                self.selected + 1 < self.visible_hits,
                                 egui::Button::new("Next →"),
                             )
                             .clicked()
@@ -428,8 +439,17 @@ impl eframe::App for App {
                 if self.started.is_some() || self.elapsed!=Duration::ZERO {ui.small(format!("{:.1} s",self.started.map(|t|t.elapsed()).unwrap_or(self.elapsed).as_secs_f32()));}
             });
             if let Some(e)=&self.error {ui.colored_label(Color32::DARK_RED,e);}
+            if !self.hits.is_empty() {
+                ui.horizontal(|ui| {
+                    ui.label(format!("Showing {} of {} matches", self.visible_hits, self.hits.len()));
+                    let remaining = self.hits.len() - self.visible_hits;
+                    if remaining > 0 && ui.button(format!("Fetch next {}", remaining.min(RESULTS_PER_PAGE))).clicked() {
+                        self.visible_hits += remaining.min(RESULTS_PER_PAGE);
+                    }
+                });
+            }
             ui.separator();ui.add_space(8.0);
-            if !self.hits.is_empty() {self.results(ui);} else if !self.busy {ui.add_space(70.0);ui.vertical_centered(|ui| {ui.heading("Your photos, found by meaning");ui.label("Choose a folder above, then try “a swimming pool” or “a bright living room”.");ui.small("JPEG · PNG · WebP · GIF · BMP   /   Top 50 matches");});}
+            if !self.hits.is_empty() {self.results(ui);} else if !self.busy {ui.add_space(70.0);ui.vertical_centered(|ui| {ui.heading("Your photos, found by meaning");ui.label("Choose a folder above, then try “a swimming pool” or “a bright living room”.");ui.small("JPEG · PNG · WebP · GIF · BMP   /   Browse matches in batches of 50");});}
         });
     }
 }

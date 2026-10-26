@@ -266,7 +266,6 @@ impl Engine {
                 .total_cmp(&a.score)
                 .then_with(|| a.path.cmp(&b.path))
         });
-        hits.truncate(50);
         let _ = tx.send(Event::Done {
             hits,
             total: files.len(),
