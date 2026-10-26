@@ -1,0 +1,23 @@
+[package]
+name = "image-tag-search"
+version = "0.1.0"
+edition = "2021"
+default-run = "clip-search"
+
+[[bin]]
+name = "clip-search"
+path = "src/clip_main.rs"
+
+[dependencies]
+anyhow = "1"
+directories = "6"
+eframe = { version = "0.31.1", default-features = false, features = ["default_fonts", "glow"] }
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp"] }
+ort = { version = "=2.0.0-rc.10", default-features = false, features = ["std", "load-dynamic", "directml"] }
+rfd = "0.15"
+regex = "1"
+serde_json = "1"
+
+[profile.release]
+strip = true
+lto = "thin"
