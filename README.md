@@ -2,6 +2,8 @@
 
 Native Rust photo search using `ort` (ONNX Runtime) and egui/eframe. Pick a folder, enter a description such as **a swimming pool**, and browse ranked images in a grid. The first 50 matches appear initially; click **Fetch next 50** to reveal more without rerunning the search. Click a thumbnail for a larger preview.
 
+![Screenshot](screenshot.jpg)
+
 ```powershell
 ./setup-clip.ps1
 cargo run --locked --bin clip-search
