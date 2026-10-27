@@ -9,10 +9,12 @@ Native Rust photo search using `ort` (ONNX Runtime) and egui/eframe. Pick a fold
 cargo run --locked --bin clip-search
 ```
 
-CLIP is the default executable, so `cargo run --locked` also opens search. The model files are already installed in this working copy. On a fresh clone, setup downloads the paired Xenova CLIP ViT-B/32 ONNX encoders (about 606 MB). Alternatively, reuse existing assets:
+CLIP is the default executable, so `cargo run --locked` also opens search. Run `./setup-clip.ps1` from the repository root to download the paired Xenova CLIP ViT-B/32 ONNX encoders (about 606 MB) and tokenizer files directly into this project's `Model/CLIP/` folder. Setup requires an internet connection and skips files that already exist. After setup, searches run locally; no other project is required.
+
+If you already have the four required CLIP files, you can copy them from a local folder instead:
 
 ```powershell
-./setup-clip.ps1 -SourceDirectory C:/Users/user-pc/Desktop/ml_playground/Downloads/CLIP
+./setup-clip.ps1 -SourceDirectory "C:/path/to/CLIP"
 ```
 
 Windows x64, stable Rust MSVC, Visual Studio C++ build tools and the Windows SDK are required. Native ONNX Runtime and DirectML DLLs are bundled under `Runtime/` and copied alongside the executable by `build.rs`.
