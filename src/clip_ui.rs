@@ -383,7 +383,7 @@ impl App {
                     ui.small("Scores rank matches; they are not probabilities.");
                     ui.horizontal(|ui| {
                         if ui
-                            .add_enabled(self.selected > 0, egui::Button::new("← Previous"))
+                            .add_enabled(self.selected > 0, egui::Button::new("< Previous"))
                             .clicked()
                         {
                             self.selected -= 1;
@@ -391,7 +391,7 @@ impl App {
                         if ui
                             .add_enabled(
                                 self.selected + 1 < self.visible_hits,
-                                egui::Button::new("Next →"),
+                                egui::Button::new("Next >"),
                             )
                             .clicked()
                         {
