@@ -18,3 +18,5 @@ target/
 dist/
 
 Model/CLIP/*.onnx
+Model/SigLIP2/*.onnx
+Model/SigLIP2/*.partial

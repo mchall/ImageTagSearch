@@ -2,7 +2,7 @@
 mod tokenizer;
 use crate::runtime;
 use anyhow::{bail, ensure, Context, Result};
-use image::GenericImageView;
+
 use ort::{session::Session, value::Tensor};
 use std::{
     collections::HashMap,
@@ -15,8 +15,8 @@ use std::{
 };
 
 const SIDE: usize = 224;
-const MEAN: [f32; 3] = [0.48145466, 0.4578275, 0.40821073];
-const STD: [f32; 3] = [0.26862954, 0.261_302_6, 0.275_777_1];
+const MEAN: [f32; 3] = [0.5; 3];
+const STD: [f32; 3] = [0.5; 3];
 
 #[derive(Clone)]
 pub struct Hit {
@@ -63,25 +63,20 @@ fn normalize(values: &[f32]) -> Result<Vec<f32>> {
     let norm = values.iter().map(|v| v * v).sum::<f32>().sqrt();
     ensure!(
         norm.is_finite() && norm > 0.0,
-        "CLIP returned an invalid embedding"
+        "SigLIP2 returned an invalid embedding"
     );
     Ok(values.iter().map(|v| v / norm).collect())
 }
 fn preprocess(path: &Path) -> Result<Vec<f32>> {
     let image = image::open(path)?.to_rgb8();
-    let (w, h) = image.dimensions();
-    let scale = SIDE as f32 / w.min(h) as f32;
-    let width = ((w as f32 * scale).round_ties_even() as u32).max(SIDE as u32);
-    let height = ((h as f32 * scale).round_ties_even() as u32).max(SIDE as u32);
     let resized = image::imageops::resize(
         &image,
-        width,
-        height,
-        image::imageops::FilterType::CatmullRom,
+        SIDE as u32,
+        SIDE as u32,
+        image::imageops::FilterType::Triangle,
     );
-    let crop = image::imageops::crop_imm(&resized, (width - 224) / 2, (height - 224) / 2, 224, 224);
     let mut data = vec![0.0; 3 * SIDE * SIDE];
-    for (x, y, p) in crop.pixels() {
+    for (x, y, p) in resized.enumerate_pixels() {
         for c in 0..3 {
             data[c * SIDE * SIDE + y as usize * SIDE + x as usize] =
                 (p[c] as f32 / 255.0 - MEAN[c]) / STD[c];
@@ -92,10 +87,13 @@ fn preprocess(path: &Path) -> Result<Vec<f32>> {
 fn image_embedding(session: &mut Session, path: &Path) -> Result<Vec<f32>> {
     let input = Tensor::from_array(([1, 3, SIDE, SIDE], preprocess(path)?))?;
     let outputs = session.run(ort::inputs!["pixel_values" => input])?;
-    let (shape, values) = outputs["image_embeds"].try_extract_tensor::<f32>()?;
+    let (shape, values) = outputs
+        .get("pooler_output")
+        .context("Missing SigLIP2 vision pooler_output")?
+        .try_extract_tensor::<f32>()?;
     ensure!(
         shape.len() == 2 && shape[0] == 1,
-        "Unexpected CLIP vision output: {shape:?}"
+        "Unexpected SigLIP2 vision output: {shape:?}"
     );
     normalize(values)
 }
@@ -103,10 +101,13 @@ fn text_embedding(models: &mut Models, query: &str) -> Result<Vec<f32>> {
     let ids = models.tokenizer.encode(query)?;
     let input = Tensor::from_array(([1, ids.len()], ids))?;
     let outputs = models.text.run(ort::inputs!["input_ids" => input])?;
-    let (shape, values) = outputs["text_embeds"].try_extract_tensor::<f32>()?;
+    let (shape, values) = outputs
+        .get("pooler_output")
+        .context("Missing SigLIP2 text pooler_output")?
+        .try_extract_tensor::<f32>()?;
     ensure!(
         shape.len() == 2 && shape[0] == 1,
-        "Unexpected CLIP text output: {shape:?}"
+        "Unexpected SigLIP2 text output: {shape:?}"
     );
     normalize(values)
 }
@@ -183,17 +184,17 @@ impl Engine {
         let key = (request.models.clone(), request.gpu, request.adapter);
         if self.key.as_ref() != Some(&key) {
             let _ = tx.send(Event::Progress(
-                "Loading CLIP text and vision models…".into(),
+                "Loading SigLIP2 text and vision models…".into(),
             ));
             let tokenizer = tokenizer::Tokenizer::load(&request.models)?;
             let (text, td) = runtime::create_session(
-                &request.models.join("text_model.onnx"),
+                &request.models.join("text_model_fp16.onnx"),
                 request.gpu,
                 request.adapter,
             )?;
             cancelled(cancel)?;
             let (vision, vd) = runtime::create_session(
-                &request.models.join("vision_model.onnx"),
+                &request.models.join("vision_model_fp16.onnx"),
                 request.gpu,
                 request.adapter,
             )?;
@@ -244,7 +245,7 @@ impl Engine {
                 let vector = &self.images[path].vector;
                 ensure!(
                     query.len() == vector.len(),
-                    "CLIP text and vision dimensions do not match"
+                    "SigLIP2 text and vision dimensions do not match"
                 );
                 Ok(query.iter().zip(vector).map(|(a, b)| a * b).sum())
             })();
@@ -260,7 +261,7 @@ impl Engine {
             }
         }
         cancelled(cancel)?;
-        ensure!(!hits.is_empty(),"Could not embed any images. Check that the CLIP model pair is compatible; see console for file errors.");
+        ensure!(!hits.is_empty(),"Could not embed any images. Check that the SigLIP2 model pair is compatible; see console for file errors.");
         hits.sort_by(|a, b| {
             b.score
                 .total_cmp(&a.score)
@@ -289,7 +290,7 @@ pub fn smoke_test() -> Result<()> {
         engine.search(
             Search {
                 folder: folder.clone(),
-                models: runtime::find_asset("Model/CLIP/text_model.onnx")
+                models: runtime::find_asset("Model/SigLIP2/text_model_fp16.onnx")
                     .parent()
                     .unwrap()
                     .into(),
@@ -334,7 +335,7 @@ pub fn smoke_test() -> Result<()> {
 mod tests {
     use super::*;
     #[test]
-    fn clip_preprocessing_and_normalization() {
+    fn siglip_preprocessing_and_normalization() {
         let path = std::env::temp_dir().join(format!("clip-test-{}.png", std::process::id()));
         image::RgbImage::from_pixel(224, 448, image::Rgb([255, 128, 0]))
             .save(&path)
@@ -350,5 +351,24 @@ mod tests {
         }
         assert!(normalize(&[0.0, 0.0]).is_err());
         assert_eq!(normalize(&[3.0, 4.0]).unwrap(), [0.6, 0.8]);
+    }
+
+    #[test]
+    fn resize_preserves_edges_of_non_square_image() {
+        let path = std::env::temp_dir().join(format!("siglip-edges-{}.png", std::process::id()));
+        let image = image::RgbImage::from_fn(448, 224, |x, _| {
+            if !(56..392).contains(&x) {
+                image::Rgb([255, 0, 0])
+            } else {
+                image::Rgb([0, 0, 255])
+            }
+        });
+        image.save(&path).unwrap();
+        let data = preprocess(&path).unwrap();
+        std::fs::remove_file(path).unwrap();
+        // A CLIP-style center crop would discard both red edges.
+        assert_eq!(data[0], 1.0);
+        assert_eq!(data[SIDE - 1], 1.0);
+        assert_eq!(data[SIDE / 2], -1.0);
     }
 }

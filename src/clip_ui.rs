@@ -103,7 +103,7 @@ impl App {
             folder: directories::UserDirs::new()
                 .and_then(|d| d.picture_dir().map(|p| p.to_string_lossy().into_owned()))
                 .unwrap_or_default(),
-            models: runtime::find_asset("Model/CLIP/text_model.onnx")
+            models: runtime::find_asset("Model/SigLIP2/text_model_fp16.onnx")
                 .parent()
                 .unwrap()
                 .to_string_lossy()
@@ -142,14 +142,13 @@ impl App {
             return;
         }
         for name in [
-            "text_model.onnx",
-            "vision_model.onnx",
-            "vocab.json",
-            "merges.txt",
+            "text_model_fp16.onnx",
+            "vision_model_fp16.onnx",
+            "tokenizer.json",
         ] {
             if !std::path::Path::new(&self.models).join(name).is_file() {
                 self.error = Some(format!(
-                    "Missing {name}. Select the CLIP model folder in Model settings."
+                    "Missing {name}. Select the SigLIP2 model folder in Model settings."
                 ));
                 return;
             }
@@ -411,7 +410,7 @@ impl eframe::App for App {
         }
         egui::CentralPanel::default().frame(egui::Frame::new().fill(Color32::WHITE).inner_margin(24.0)).show(ctx,|ui| {
             ui.heading(egui::RichText::new("Photo Search").size(30.0));
-            ui.label("Find photos by describing them. CLIP searches the contents of your images locally.");ui.add_space(12.0);
+            ui.label("Find photos by describing them. SigLIP2 searches the contents of your images locally.");ui.add_space(12.0);
             let mut submit=false;
             ui.add_enabled_ui(!self.busy,|ui| {
                 ui.horizontal(|ui| {
@@ -426,7 +425,7 @@ impl eframe::App for App {
                 });
                 ui.horizontal(|ui| {ui.checkbox(&mut self.recursive,"Include subfolders");ui.checkbox(&mut self.gpu,"Use GPU (DirectML)");});
                 ui.collapsing("Model settings",|ui| {
-                    ui.label("CLIP folder containing text_model.onnx, vision_model.onnx, vocab.json and merges.txt");
+                    ui.label("SigLIP2 folder containing text_model_fp16.onnx, vision_model_fp16.onnx, tokenizer.json");
                     ui.horizontal(|ui| {ui.add(egui::TextEdit::singleline(&mut self.models).desired_width((ui.available_width()-110.0).max(100.0)));if ui.button("Browse models…").clicked() {if let Some(p)=rfd::FileDialog::new().pick_folder() {self.models=p.to_string_lossy().into_owned();}}});
                     ui.horizontal(|ui| {ui.label("GPU adapter");ui.add(egui::DragValue::new(&mut self.adapter).range(0..=32));});
                     ui.small(&self.device);

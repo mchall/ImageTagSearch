@@ -7,7 +7,7 @@ fn main() -> anyhow::Result<()> {
         return clip::smoke_test();
     }
     eframe::run_native(
-        "Photo Search · CLIP",
+        "Photo Search · SigLIP2",
         eframe::NativeOptions {
             viewport: eframe::egui::ViewportBuilder::default()
                 .with_inner_size([1360.0, 900.0])
